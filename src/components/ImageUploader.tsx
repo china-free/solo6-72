@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { Upload, X, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { useGameStore } from '@/store/gameStore';
+import { getRequiredImageCount, hasEnoughCustomImages } from '@/utils/gameLogic';
 
 interface ImageUploaderProps {
   compact?: boolean;
@@ -8,10 +9,14 @@ interface ImageUploaderProps {
 
 export function ImageUploader({ compact = false }: ImageUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const difficulty = useGameStore((state) => state.difficulty);
   const customImages = useGameStore((state) => state.customImages);
   const addCustomImage = useGameStore((state) => state.addCustomImage);
   const removeCustomImage = useGameStore((state) => state.removeCustomImage);
   const clearCustomImages = useGameStore((state) => state.clearCustomImages);
+
+  const requiredImages = getRequiredImageCount(difficulty);
+  const hasEnough = hasEnoughCustomImages(difficulty, customImages);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -96,7 +101,8 @@ export function ImageUploader({ compact = false }: ImageUploaderProps) {
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-display font-bold text-neon-purple flex items-center gap-2">
           <ImageIcon className="w-5 h-5" />
-          自定义图片 ({customImages.length}/32)
+          自定义图片 ({customImages.length}/{requiredImages})
+          <span className="text-xs font-normal text-gray-500 ml-2">（{difficulty} 难度需要 {requiredImages} 张）</span>
         </h3>
         {customImages.length > 0 && (
           <button
@@ -116,7 +122,7 @@ export function ImageUploader({ compact = false }: ImageUploaderProps) {
         <Upload className="w-10 h-10 text-gray-500" />
         <div className="text-center">
           <p className="font-display font-bold text-gray-300">点击上传图片</p>
-          <p className="text-sm text-gray-500 mt-1">支持多选，至少需要 8 张图片</p>
+          <p className="text-sm text-gray-500 mt-1">支持多选，{difficulty} 难度需要 {requiredImages} 张图片</p>
         </div>
       </div>
 
@@ -148,9 +154,15 @@ export function ImageUploader({ compact = false }: ImageUploaderProps) {
         </div>
       )}
 
-      {customImages.length > 0 && customImages.length < 8 && (
+      {customImages.length > 0 && !hasEnough && (
         <p className="mt-3 text-sm text-neon-yellow">
-          ⚠️ 还需要上传至少 {8 - customImages.length} 张图片才能开始游戏
+          ⚠️ {difficulty} 难度需要 {requiredImages} 张图片，还需要上传至少 {requiredImages - customImages.length} 张才能开始游戏
+        </p>
+      )}
+
+      {hasEnough && (
+        <p className="mt-3 text-sm text-neon-green">
+          ✓ 图片数量足够，可以开始游戏！
         </p>
       )}
     </div>

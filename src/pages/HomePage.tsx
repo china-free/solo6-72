@@ -6,14 +6,17 @@ import { BestRecords } from '@/components/BestRecords';
 import { ImageUploader } from '@/components/ImageUploader';
 import { SoundToggle } from '@/components/SoundToggle';
 import { useGameStore } from '@/store/gameStore';
+import { hasEnoughCustomImages, getRequiredImageCount } from '@/utils/gameLogic';
 
 export function HomePage() {
   const navigate = useNavigate();
   const theme = useGameStore((state) => state.theme);
+  const difficulty = useGameStore((state) => state.difficulty);
   const customImages = useGameStore((state) => state.customImages);
   const startGame = useGameStore((state) => state.startGame);
 
-  const canStart = theme !== 'custom' || customImages.length >= 8;
+  const requiredImages = getRequiredImageCount(difficulty);
+  const canStart = theme !== 'custom' || hasEnoughCustomImages(difficulty, customImages);
 
   const handleStart = () => {
     if (!canStart) return;
@@ -65,7 +68,7 @@ export function HomePage() {
               `}
             >
               <Play className="w-7 h-7" />
-              {canStart ? '开始游戏' : theme === 'custom' ? '请上传至少 8 张图片' : '开始游戏'}
+              {canStart ? '开始游戏' : theme === 'custom' ? `请上传至少 ${requiredImages} 张图片（当前 ${customImages.length}/${requiredImages}）` : '开始游戏'}
             </button>
           </div>
         </div>

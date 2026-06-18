@@ -28,6 +28,14 @@ export function getGridCols(difficulty: DifficultyType): number {
   }
 }
 
+export function getRequiredImageCount(difficulty: DifficultyType): number {
+  return getPairCount(difficulty);
+}
+
+export function hasEnoughCustomImages(difficulty: DifficultyType, customImages: string[]): boolean {
+  return customImages.length >= getRequiredImageCount(difficulty);
+}
+
 function getThemeValues(theme: ThemeType, customImages?: string[]): string[] {
   switch (theme) {
     case 'numbers':
@@ -52,10 +60,22 @@ export function generateCards(
 ): Card[] {
   const pairCount = getPairCount(difficulty);
   const allValues = getThemeValues(theme, customImages);
-  const selectedValues = allValues.slice(0, Math.min(pairCount, allValues.length));
 
-  while (selectedValues.length < pairCount) {
-    selectedValues.push(selectedValues[selectedValues.length % allValues.length]);
+  let selectedValues: string[];
+
+  if (theme === 'custom' && customImages) {
+    if (!hasEnoughCustomImages(difficulty, customImages)) {
+      console.warn(`自定义图片数量不足：需要 ${pairCount} 张，实际只有 ${customImages.length} 张`);
+      selectedValues = customImages.slice(0, Math.min(customImages.length, pairCount));
+    } else {
+      selectedValues = customImages.slice(0, pairCount);
+    }
+  } else {
+    selectedValues = allValues.slice(0, Math.min(pairCount, allValues.length));
+
+    while (selectedValues.length < pairCount) {
+      selectedValues.push(allValues[selectedValues.length % allValues.length]);
+    }
   }
 
   const cardPairs: Card[] = [];
