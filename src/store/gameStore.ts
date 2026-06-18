@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Card, ThemeType, DifficultyType } from '@/types';
-import { generateCards, checkMatch, hasEnoughCustomImages, getPairCount } from '@/utils/gameLogic';
+import { generateCards, checkMatch, getCardGenerationStrategy } from '@/utils/gameLogic';
 import {
   playFlipSound,
   playMatchSound,
@@ -69,9 +69,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   startGame: () => {
     const { theme, difficulty, customImages } = get();
 
-    if (theme === 'custom' && !hasEnoughCustomImages(difficulty, customImages)) {
-      const required = getPairCount(difficulty);
-      console.error(`图片不足：${difficulty} 难度需要 ${required} 张图片，但只有 ${customImages.length} 张`);
+    const strategy = getCardGenerationStrategy(theme);
+    if (!strategy.canGenerate(difficulty, customImages)) {
+      const validationInfo = strategy.getValidationInfo(difficulty, customImages);
+      console.error(
+        `无法开始游戏：${validationInfo.hint}`,
+        `（当前 ${validationInfo.current}/${validationInfo.required}）`
+      );
       return;
     }
 

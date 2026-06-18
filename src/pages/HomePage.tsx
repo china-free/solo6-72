@@ -6,7 +6,7 @@ import { BestRecords } from '@/components/BestRecords';
 import { ImageUploader } from '@/components/ImageUploader';
 import { SoundToggle } from '@/components/SoundToggle';
 import { useGameStore } from '@/store/gameStore';
-import { hasEnoughCustomImages, getRequiredImageCount } from '@/utils/gameLogic';
+import { getCardGenerationStrategy } from '@/utils/gameLogic';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -15,8 +15,9 @@ export function HomePage() {
   const customImages = useGameStore((state) => state.customImages);
   const startGame = useGameStore((state) => state.startGame);
 
-  const requiredImages = getRequiredImageCount(difficulty);
-  const canStart = theme !== 'custom' || hasEnoughCustomImages(difficulty, customImages);
+  const strategy = getCardGenerationStrategy(theme);
+  const validationInfo = strategy.getValidationInfo(difficulty, customImages);
+  const canStart = validationInfo.isSufficient;
 
   const handleStart = () => {
     if (!canStart) return;
@@ -68,7 +69,7 @@ export function HomePage() {
               `}
             >
               <Play className="w-7 h-7" />
-              {canStart ? '开始游戏' : theme === 'custom' ? `请上传至少 ${requiredImages} 张图片（当前 ${customImages.length}/${requiredImages}）` : '开始游戏'}
+              {canStart ? '开始游戏' : validationInfo.hint}
             </button>
           </div>
         </div>

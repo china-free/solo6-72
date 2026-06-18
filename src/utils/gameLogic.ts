@@ -28,29 +28,156 @@ export function getGridCols(difficulty: DifficultyType): number {
   }
 }
 
+export interface CardGenerationStrategy {
+  getRequiredPairCount(difficulty: DifficultyType): number;
+  canGenerate(difficulty: DifficultyType, customImages?: string[]): boolean;
+  generateValues(difficulty: DifficultyType, customImages?: string[]): string[];
+  getValidationInfo(difficulty: DifficultyType, customImages?: string[]): {
+    required: number;
+    current: number;
+    isSufficient: boolean;
+    hint: string;
+  };
+}
+
+class DefaultThemeStrategy implements CardGenerationStrategy {
+  private valuePool: string[];
+
+  constructor(valuePool: string[]) {
+    this.valuePool = valuePool;
+  }
+
+  getRequiredPairCount(difficulty: DifficultyType): number {
+    return getPairCount(difficulty);
+  }
+
+  canGenerate(difficulty: DifficultyType): boolean {
+    const required = this.getRequiredPairCount(difficulty);
+    return this.valuePool.length > 0 && required > 0;
+  }
+
+  generateValues(difficulty: DifficultyType): string[] {
+    const pairCount = this.getRequiredPairCount(difficulty);
+    const selectedValues = this.valuePool.slice(0, Math.min(pairCount, this.valuePool.length));
+
+    while (selectedValues.length < pairCount) {
+      selectedValues.push(this.valuePool[selectedValues.length % this.valuePool.length]);
+    }
+
+    return selectedValues;
+  }
+
+  getValidationInfo(difficulty: DifficultyType): {
+    required: number;
+    current: number;
+    isSufficient: boolean;
+    hint: string;
+  } {
+    const required = this.getRequiredPairCount(difficulty);
+    const current = this.valuePool.length;
+    const isSufficient = this.canGenerate(difficulty);
+
+    return {
+      required,
+      current,
+      isSufficient,
+      hint: isSufficient
+        ? `已加载 ${current} 个备选值，可生成 ${required} 对`
+        : `需要 ${required} 对，当前值池不足`,
+    };
+  }
+}
+
+class CustomImageStrategy implements CardGenerationStrategy {
+  getRequiredPairCount(difficulty: DifficultyType): number {
+    return getPairCount(difficulty);
+  }
+
+  canGenerate(difficulty: DifficultyType, customImages?: string[]): boolean {
+    if (!customImages || customImages.length === 0) return false;
+    const required = this.getRequiredPairCount(difficulty);
+    return customImages.length >= required;
+  }
+
+  generateValues(difficulty: DifficultyType, customImages?: string[]): string[] {
+    const pairCount = this.getRequiredPairCount(difficulty);
+
+    if (!customImages || customImages.length === 0) {
+      console.warn('自定义图片为空，使用 Emoji 作为备用');
+      return EMOJI_VALUES.slice(0, pairCount);
+    }
+
+    if (!this.canGenerate(difficulty, customImages)) {
+      console.warn(
+        `自定义图片数量不足：需要 ${pairCount} 张，实际只有 ${customImages.length} 张，仅生成 ${Math.min(customImages.length, pairCount)} 对`
+      );
+      return customImages.slice(0, Math.min(customImages.length, pairCount));
+    }
+
+    return customImages.slice(0, pairCount);
+  }
+
+  getValidationInfo(difficulty: DifficultyType, customImages?: string[]): {
+    required: number;
+    current: number;
+    isSufficient: boolean;
+    hint: string;
+  } {
+    const required = this.getRequiredPairCount(difficulty);
+    const current = customImages?.length || 0;
+    const isSufficient = this.canGenerate(difficulty, customImages);
+
+    return {
+      required,
+      current,
+      isSufficient,
+      hint: isSufficient
+        ? `图片数量充足（${current}/${required}），可以开始游戏`
+        : `还需要上传 ${required - current} 张图片（当前 ${current}/${required}）`,
+    };
+  }
+}
+
+const strategyCache = new Map<ThemeType, CardGenerationStrategy>();
+
+export function getCardGenerationStrategy(theme: ThemeType): CardGenerationStrategy {
+  if (strategyCache.has(theme)) {
+    return strategyCache.get(theme)!;
+  }
+
+  let strategy: CardGenerationStrategy;
+
+  switch (theme) {
+    case 'numbers':
+      strategy = new DefaultThemeStrategy(NUMBER_VALUES);
+      break;
+    case 'letters':
+      strategy = new DefaultThemeStrategy(LETTER_VALUES);
+      break;
+    case 'animals':
+      strategy = new DefaultThemeStrategy(ANIMAL_VALUES);
+      break;
+    case 'emoji':
+      strategy = new DefaultThemeStrategy(EMOJI_VALUES);
+      break;
+    case 'custom':
+      strategy = new CustomImageStrategy();
+      break;
+    default:
+      strategy = new DefaultThemeStrategy(EMOJI_VALUES);
+  }
+
+  strategyCache.set(theme, strategy);
+  return strategy;
+}
+
 export function getRequiredImageCount(difficulty: DifficultyType): number {
   return getPairCount(difficulty);
 }
 
 export function hasEnoughCustomImages(difficulty: DifficultyType, customImages: string[]): boolean {
-  return customImages.length >= getRequiredImageCount(difficulty);
-}
-
-function getThemeValues(theme: ThemeType, customImages?: string[]): string[] {
-  switch (theme) {
-    case 'numbers':
-      return NUMBER_VALUES;
-    case 'letters':
-      return LETTER_VALUES;
-    case 'animals':
-      return ANIMAL_VALUES;
-    case 'emoji':
-      return EMOJI_VALUES;
-    case 'custom':
-      return customImages && customImages.length > 0 ? customImages : EMOJI_VALUES;
-    default:
-      return EMOJI_VALUES;
-  }
+  const strategy = getCardGenerationStrategy('custom');
+  return strategy.canGenerate(difficulty, customImages);
 }
 
 export function generateCards(
@@ -58,25 +185,8 @@ export function generateCards(
   difficulty: DifficultyType,
   customImages?: string[]
 ): Card[] {
-  const pairCount = getPairCount(difficulty);
-  const allValues = getThemeValues(theme, customImages);
-
-  let selectedValues: string[];
-
-  if (theme === 'custom' && customImages) {
-    if (!hasEnoughCustomImages(difficulty, customImages)) {
-      console.warn(`自定义图片数量不足：需要 ${pairCount} 张，实际只有 ${customImages.length} 张`);
-      selectedValues = customImages.slice(0, Math.min(customImages.length, pairCount));
-    } else {
-      selectedValues = customImages.slice(0, pairCount);
-    }
-  } else {
-    selectedValues = allValues.slice(0, Math.min(pairCount, allValues.length));
-
-    while (selectedValues.length < pairCount) {
-      selectedValues.push(allValues[selectedValues.length % allValues.length]);
-    }
-  }
+  const strategy = getCardGenerationStrategy(theme);
+  const selectedValues = strategy.generateValues(difficulty, customImages);
 
   const cardPairs: Card[] = [];
   selectedValues.forEach((value, index) => {
